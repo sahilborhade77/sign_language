@@ -5,6 +5,9 @@ import mediapipe as mp
 
 WHITE_COLOR = (245, 242, 226)
 RED_COLOR = (25, 35, 240)
+GREEN_COLOR = (25, 200, 25)
+YELLOW_COLOR = (25, 200, 200)
+CYAN_COLOR = (200, 200, 25)
 
 HEIGHT = 600
 
@@ -18,8 +21,22 @@ class WebcamManager(object):
         self.sign_detected = ""
 
     def update(
-        self, frame: np.ndarray, results, sign_detected: str, is_recording: bool
+        self, frame: np.ndarray, results, sign_detected: str, is_recording: bool, 
+        sequence_length: int = 0, current_mode: str = "recognize", current_sign_name: str = None,
+        dtw_distance: float = None
     ):
+        """
+        Update the webcam display with landmarks, text, and status information.
+        
+        :param frame: Current webcam frame
+        :param results: MediaPipe detection results
+        :param sign_detected: Detected sign name
+        :param is_recording: Whether currently recording
+        :param sequence_length: Number of frames collected
+        :param current_mode: Current mode ("record" or "recognize")
+        :param current_sign_name: Name of sign being recorded
+        :param dtw_distance: DTW distance for debugging
+        """
         self.sign_detected = sign_detected
 
         # Draw landmarks
@@ -32,16 +49,81 @@ class WebcamManager(object):
         # Flip the image vertically for mirror effect
         frame = cv2.flip(frame, 1)
 
+        # Draw mode indicator
+        mode_text = f"MODE: {current_mode.upper()}"
+        mode_color = RED_COLOR if current_mode == "record" else GREEN_COLOR
+        cv2.putText(
+            frame,
+            mode_text,
+            (10, 30),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.8,
+            mode_color,
+            2,
+        )
+
+        # Draw help/keyboard shortcuts
+        help_text = "R=Record  M=Mode  N=NewSign  Q=Quit"
+        cv2.putText(
+            frame,
+            help_text,
+            (10, 60),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            WHITE_COLOR,
+            1,
+        )
+
+        # Draw recording status message
+        if is_recording:
+            status_text = f"🎥 Recording... ({sequence_length}/{50} frames)"
+            cv2.putText(
+                frame,
+                status_text,
+                (10, 90),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                RED_COLOR,
+                2,
+            )
+        
+        # Draw current sign name being recorded
+        if current_sign_name and current_mode == "record":
+            sign_name_text = f"Sign: '{current_sign_name}'"
+            cv2.putText(
+                frame,
+                sign_name_text,
+                (10, 120),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                YELLOW_COLOR,
+                2,
+            )
+
+        # Draw DTW distance (for debugging)
+        if dtw_distance is not None:
+            distance_text = f"DTW Distance: {dtw_distance:.2f}"
+            cv2.putText(
+                frame,
+                distance_text,
+                (10, 150),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                CYAN_COLOR,
+                1,
+            )
+
         # Write result if there is
         frame = self.draw_text(frame)
 
-        # Chose circle color
+        # Status circle color
         color = WHITE_COLOR
         if is_recording:
             color = RED_COLOR
 
-        # Update the frame
-        cv2.circle(frame, (30, 30), 20, color, -1)
+        # Draw status indicator (circle)
+        cv2.circle(frame, (WIDTH - 30, 30), 15, color, -1)
+        
         cv2.imshow("OpenCV Feed", frame)
 
     def draw_text(

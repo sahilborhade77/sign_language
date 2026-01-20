@@ -12,31 +12,33 @@ def mediapipe_detection(image, model):
 
 
 def draw_landmarks(image, results):
-    mp_holistic = mp.solutions.holistic  # Holistic model
-    mp_drawing = mp.solutions.drawing_utils  # Drawing utilities
+    mp_holistic = mp.solutions.holistic
+    mp_drawing = mp.solutions.drawing_utils
 
     # Draw left hand connections
-    image = mp_drawing.draw_landmarks(
-        image,
-        landmark_list=results.left_hand_landmarks,
-        connections=mp_holistic.HAND_CONNECTIONS,
-        landmark_drawing_spec=mp_drawing.DrawingSpec(
-            color=(232, 254, 255), thickness=1, circle_radius=4
-        ),
-        connection_drawing_spec=mp_drawing.DrawingSpec(
-            color=(255, 249, 161), thickness=2, circle_radius=2
-        ),
-    )
+    if results.left_hand_landmarks:
+        image = mp_drawing.draw_landmarks(
+            image,
+            landmark_list=results.left_hand_landmarks,
+            connections=mp_holistic.HAND_CONNECTIONS,
+            landmark_drawing_spec=mp_drawing.DrawingSpec(
+                color=(232, 254, 255), thickness=1, circle_radius=4
+            ),
+            connection_drawing_spec=mp_drawing.DrawingSpec(
+                color=(255, 249, 161), thickness=2, circle_radius=2
+            ),
+        )
     # Draw right hand connections
-    image = mp_drawing.draw_landmarks(
-        image,
-        landmark_list=results.right_hand_landmarks,
-        connections=mp_holistic.HAND_CONNECTIONS,
-        landmark_drawing_spec=mp_drawing.DrawingSpec(
-            color=(232, 254, 255), thickness=1, circle_radius=4
-        ),
-        connection_drawing_spec=mp_drawing.DrawingSpec(
-            color=(255, 249, 161), thickness=2, circle_radius=2
-        ),
-    )
+    if results.right_hand_landmarks:
+        image = mp_drawing.draw_landmarks(
+            image,
+            landmark_list=results.right_hand_landmarks,
+            connections=mp_holistic.HAND_CONNECTIONS,
+            landmark_drawing_spec=mp_drawing.DrawingSpec(
+                color=(232, 254, 255), thickness=1, circle_radius=4
+            ),
+            connection_drawing_spec=mp_drawing.DrawingSpec(
+                color=(255, 249, 161), thickness=2, circle_radius=2
+            ),
+        )
     return image

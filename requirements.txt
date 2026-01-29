@@ -1,7 +1,6 @@
 fastdtw==0.3.4
 mediapipe==0.10.5
 numpy==1.24.3
-opencv-python-headless==4.8.0
 pandas==2.0.0
 Pillow==10.0.0
 pytube==11.0.1

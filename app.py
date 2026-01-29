@@ -1,15 +1,6 @@
-# ---------- IMPORTANT: must come BEFORE cv2 ----------
-import os
-os.environ["OPENCV_VIDEOIO_PRIORITY_MSMF"] = "0"
-os.environ["OPENCV_LOG_LEVEL"] = "ERROR"
-# ----------------------------------------------------
-
 import streamlit as st
 import numpy as np
-from PIL import Image
-
-# Lazy import cv2 (safe for Streamlit Cloud)
-import cv2
+from PIL import Image, ImageDraw, ImageFont
 import mediapipe as mp
 
 from utils.mediapipe_utils import mediapipe_detection
@@ -18,125 +9,93 @@ from sign_recorder import SignRecorder
 from webcam_manager import WebcamManager
 
 
-# Cache model loading for performance and to avoid reloads
 @st.cache_resource
 def load_sign_recorder():
-    """Load the sign recognition model once."""
     return SignRecorder(reference_signs=None, mode="recognize")
 
 
 @st.cache_resource
 def load_webcam_mgr():
-    """Load the webcam manager once."""
     return WebcamManager()
 
 
+def draw_text_pil(image, text):
+    """Draw text using PIL (no OpenCV)"""
+    img = Image.fromarray(image)
+    draw = ImageDraw.Draw(img)
+    draw.text((10, 10), text, fill=(255, 0, 0))
+    return np.array(img)
+
+
 def main():
-    st.set_page_config(
-        page_title="Sign Language Recognition",
-        layout="centered"
-    )
+    st.set_page_config(page_title="Sign Language Recognition")
 
     st.title("🤟 Sign Language Recognition")
-    st.markdown("Snapshot-based sign language recognition using MediaPipe and DTW")
+    st.markdown("Streamlit + MediaPipe based sign recognition")
 
-    # Load cached components
     sign_recorder = load_sign_recorder()
-    webcam_manager = load_webcam_mgr()
 
-    # Initialize session state
-    if "is_recording" not in st.session_state:
-        st.session_state.is_recording = False
-    if "recorded_frames" not in st.session_state:
-        st.session_state.recorded_frames = []
-    if "last_prediction" not in st.session_state:
-        st.session_state.last_prediction = None
+    if "frames" not in st.session_state:
+        st.session_state.frames = []
+    if "recording" not in st.session_state:
+        st.session_state.recording = False
+    if "prediction" not in st.session_state:
+        st.session_state.prediction = None
 
-    # Controls
     col1, col2 = st.columns(2)
 
     with col1:
-        if st.button("🎥 Start / Stop Recording", type="primary"):
-            st.session_state.is_recording = not st.session_state.is_recording
-            if st.session_state.is_recording:
-                st.session_state.recorded_frames = []
-                st.info("Recording started — take multiple photos")
-            else:
-                st.success("Recording stopped")
+        if st.button("🎥 Start / Stop Recording"):
+            st.session_state.recording = not st.session_state.recording
+            st.session_state.frames = []
 
     with col2:
         if st.button("🔄 Reset"):
-            st.session_state.is_recording = False
-            st.session_state.recorded_frames = []
-            st.session_state.last_prediction = None
-            sign_recorder.recorded_results = []
+            st.session_state.frames = []
+            st.session_state.prediction = None
+            st.session_state.recording = False
             st.rerun()
 
-    # Camera input (Streamlit-safe)
-    st.subheader("📷 Camera Input")
-    camera_image = st.camera_input("Capture frame")
+    image_file = st.camera_input("Take a photo")
 
-    if camera_image is not None:
-        # Convert to OpenCV format
-        image = np.array(Image.open(camera_image))
-        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+    if image_file:
+        image = np.array(Image.open(image_file))
 
-        # MediaPipe processing
         with mp.solutions.holistic.Holistic(
             min_detection_confidence=0.5,
             min_tracking_confidence=0.5,
-            model_complexity=1
         ) as holistic:
 
             processed_image, results = mediapipe_detection(image, holistic)
 
-            # Recording mode
-            if st.session_state.is_recording:
-                st.session_state.recorded_frames.append(results)
-                st.info(f"Frames recorded: {len(st.session_state.recorded_frames)}/50")
+            if st.session_state.recording:
+                st.session_state.frames.append(results)
+                st.info(f"Frames recorded: {len(st.session_state.frames)}")
 
-                if len(st.session_state.recorded_frames) >= 50:
-                    sign_recorder.recorded_results = st.session_state.recorded_frames
+                if len(st.session_state.frames) >= 40:
+                    sign_recorder.recorded_results = st.session_state.frames
                     prediction = sign_recorder._compute_distances_and_predict()
-                    st.session_state.last_prediction = prediction
-                    st.session_state.is_recording = False
-                    st.session_state.recorded_frames = []
-                    st.success(f"✅ Prediction: **{prediction}**")
-
-            # Single-frame inference
+                    st.session_state.prediction = prediction
+                    st.session_state.frames = []
+                    st.session_state.recording = False
             else:
                 sign_recorder.recorded_results = [results]
-                prediction = sign_recorder._compute_distances_and_predict()
-                st.session_state.last_prediction = prediction
+                st.session_state.prediction = (
+                    sign_recorder._compute_distances_and_predict()
+                )
 
-            # Draw landmarks
-            display_image = webcam_manager.draw_landmarks_on_image(
-                processed_image.copy(), results
+            annotated = draw_text_pil(
+                processed_image,
+                f"Prediction: {st.session_state.prediction or ''}"
             )
 
-            display_image = webcam_manager.add_text_overlay(
-                display_image,
-                sign_detected=st.session_state.last_prediction or "",
-                is_recording=st.session_state.is_recording,
-                sequence_length=len(st.session_state.recorded_frames),
-                current_mode="recognize",
-                current_sign_name=None,
-                dtw_distance=sign_recorder.last_dtw_distance,
-            )
+            st.image(annotated, caption="Processed Frame")
 
-            st.image(display_image, channels="BGR", caption="Processed Frame")
-
-            if st.session_state.last_prediction:
-                st.success(f"🎯 Prediction: **{st.session_state.last_prediction}**")
-
-    # Available signs
-    available_signs = get_available_signs()
-    if available_signs:
+    signs = get_available_signs()
+    if signs:
         with st.expander("📚 Available Signs"):
-            for sign in available_signs:
-                st.write(f"• {sign}")
-    else:
-        st.info("No reference signs found yet.")
+            for s in signs:
+                st.write(f"• {s}")
 
 
 if __name__ == "__main__":

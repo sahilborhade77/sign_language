@@ -1,0 +1,6 @@
+- [ ] Install Streamlit and update requirements.txt
+- [ ] Rewrite main.py as Streamlit app with st.camera_input
+- [ ] Adapt webcam_manager.py to draw landmarks on numpy array for Streamlit display
+- [ ] Modify sign_recorder.py for snapshot-based processing if needed
+- [ ] Test MediaPipe processing on captured images
+- [ ] Ensure DTW recognition works with single images or sequences

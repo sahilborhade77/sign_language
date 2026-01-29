@@ -1,4 +1,3 @@
-import cv2
 import numpy as np
 import mediapipe as mp
 
@@ -147,6 +146,192 @@ class WebcamManager(object):
         cv2.putText(
             frame,
             self.sign_detected,
+            (text_x, text_y + text_h + font_size - 1),
+            font,
+            font_size,
+            (118, 62, 37),
+            font_thickness,
+        )
+        return frame
+
+    @staticmethod
+    def draw_landmarks(image, results):
+        mp_holistic = mp.solutions.holistic  # Holistic model
+        mp_drawing = mp.solutions.drawing_utils  # Drawing utilities
+
+        # Draw left hand connections
+        mp_drawing.draw_landmarks(
+            image,
+            landmark_list=results.left_hand_landmarks,
+            connections=mp_holistic.HAND_CONNECTIONS,
+            landmark_drawing_spec=mp_drawing.DrawingSpec(
+                color=(232, 254, 255), thickness=1, circle_radius=1
+            ),
+            connection_drawing_spec=mp_drawing.DrawingSpec(
+                color=(255, 249, 161), thickness=2, circle_radius=2
+            ),
+        )
+        # Draw right hand connections
+        mp_drawing.draw_landmarks(
+            image,
+            landmark_list=results.right_hand_landmarks,
+            connections=mp_holistic.HAND_CONNECTIONS,
+            landmark_drawing_spec=mp_drawing.DrawingSpec(
+                color=(232, 254, 255), thickness=1, circle_radius=2
+            ),
+            connection_drawing_spec=mp_drawing.DrawingSpec(
+                color=(255, 249, 161), thickness=2, circle_radius=2
+            ),
+        )
+=======
+import cv2
+import numpy as np
+import mediapipe as mp
+
+
+WHITE_COLOR = (245, 242, 226)
+RED_COLOR = (25, 35, 240)
+GREEN_COLOR = (25, 200, 25)
+YELLOW_COLOR = (25, 200, 200)
+CYAN_COLOR = (200, 200, 25)
+
+HEIGHT = 600
+
+
+class WebcamManager(object):
+    """Object that draws landmarks on images for Streamlit display"""
+
+    def __init__(self):
+        self.sign_detected = ""
+
+    def draw_landmarks_on_image(self, image: np.ndarray, results):
+        """
+        Draw landmarks on the image and return it.
+        
+        :param image: Input image
+        :param results: MediaPipe detection results
+        :return: Image with landmarks drawn
+        """
+        # Draw landmarks
+        self.draw_landmarks(image, results)
+        return image
+
+    def add_text_overlay(
+        self, image: np.ndarray, sign_detected: str, is_recording: bool, 
+        sequence_length: int = 0, current_mode: str = "recognize", current_sign_name: str = "",
+        dtw_distance: float = None
+    ):
+        """
+        Add text overlay to the image.
+        
+        :param image: Input image
+        :param sign_detected: Detected sign name
+        :param is_recording: Whether currently recording
+        :param sequence_length: Number of frames collected
+        :param current_mode: Current mode ("record" or "recognize")
+        :param current_sign_name: Name of sign being recorded
+        :param dtw_distance: DTW distance for debugging
+        :return: Image with text overlay
+        """
+        self.sign_detected = sign_detected
+
+        # Resize frame
+        h, w = image.shape[:2]
+        aspect_ratio = w / h
+        new_w = int(HEIGHT * aspect_ratio)
+        image = cv2.resize(image, (new_w, HEIGHT), interpolation=cv2.INTER_AREA)
+
+        # Flip the image horizontally for mirror effect
+        image = cv2.flip(image, 1)
+
+        # Draw mode indicator
+        mode_text = f"MODE: {current_mode.upper()}"
+        mode_color = RED_COLOR if current_mode == "record" else GREEN_COLOR
+        cv2.putText(
+            image,
+            mode_text,
+            (10, 30),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.8,
+            mode_color,
+            2,
+        )
+
+        # Draw recording status message
+        if is_recording:
+            status_text = f"🎥 Recording... ({sequence_length}/50 frames)"
+            cv2.putText(
+                image,
+                status_text,
+                (10, 60),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                RED_COLOR,
+                2,
+            )
+        
+        # Draw current sign name being recorded
+        if current_sign_name and current_mode == "record":
+            sign_name_text = f"Sign: '{current_sign_name}'"
+            cv2.putText(
+                image,
+                sign_name_text,
+                (10, 90),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                YELLOW_COLOR,
+                2,
+            )
+
+        # Draw DTW distance (for debugging)
+        if dtw_distance is not None:
+            distance_text = f"DTW Distance: {dtw_distance:.2f}"
+            cv2.putText(
+                image,
+                distance_text,
+                (10, 120),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                CYAN_COLOR,
+                1,
+            )
+
+        # Draw detected sign
+        if sign_detected:
+            image = self.draw_text(image, sign_detected)
+
+        # Status circle color
+        color = WHITE_COLOR
+        if is_recording:
+            color = RED_COLOR
+
+        # Draw status indicator (circle)
+        cv2.circle(image, (new_w - 30, 30), 15, color, -1)
+        
+        return image
+
+    def draw_text(
+        self,
+        frame,
+        text,
+        font=cv2.FONT_HERSHEY_COMPLEX,
+        font_size=1,
+        font_thickness=2,
+        offset=int(HEIGHT * 0.02),
+        bg_color=(245, 242, 176),
+    ):
+        h, w = frame.shape[:2]
+
+        (text_w, text_h), _ = cv2.getTextSize(
+            text, font, font_size, font_thickness
+        )
+
+        text_x, text_y = int((w - text_w) / 2), h - text_h - offset
+
+        cv2.rectangle(frame, (0, text_y - offset), (w, h), bg_color, -1)
+        cv2.putText(
+            frame,
+            text,
             (text_x, text_y + text_h + font_size - 1),
             font,
             font_size,

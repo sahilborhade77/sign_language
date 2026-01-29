@@ -1,5 +1,4 @@
 import numpy as np
-import mediapipe as mp
 
 def mediapipe_detection(image, model):
     """

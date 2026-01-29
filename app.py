@@ -1,7 +1,6 @@
 import streamlit as st
 import numpy as np
 from PIL import Image
-import mediapipe as mp
 
 from utils.mediapipe_utils import mediapipe_detection
 from utils.sign_storage import get_available_signs
@@ -77,6 +76,7 @@ def main():
         image_rgb = image
 
         # Process with MediaPipe
+        import mediapipe as mp
         with mp.solutions.holistic.Holistic(
             min_detection_confidence=0.5,
             min_tracking_confidence=0.5,

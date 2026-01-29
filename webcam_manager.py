@@ -1,6 +1,5 @@
+from PIL import Image, ImageDraw, ImageFont
 import numpy as np
-import mediapipe as mp
-
 
 WHITE_COLOR = (245, 242, 226)
 RED_COLOR = (25, 35, 240)
@@ -10,110 +9,85 @@ CYAN_COLOR = (200, 200, 25)
 
 HEIGHT = 600
 
-
 class WebcamManager(object):
-    """Object that displays the Webcam output, draws the landmarks detected and
-    outputs the sign prediction
-    """
+    """Object that adds text overlays to images for Streamlit display using PIL"""
 
     def __init__(self):
         self.sign_detected = ""
+        # Load default font
+        try:
+            self.font = ImageFont.truetype("arial.ttf", 20)
+        except IOError:
+            self.font = ImageFont.load_default()
 
-    def update(
-        self, frame: np.ndarray, results, sign_detected: str, is_recording: bool, 
-        sequence_length: int = 0, current_mode: str = "recognize", current_sign_name: str = None,
+    def draw_landmarks_on_image(self, image: np.ndarray, results):
+        """
+        Return the image without drawing landmarks (removed to avoid cv2 dependency).
+
+        :param image: Input image
+        :param results: MediaPipe detection results (unused)
+        :return: Original image
+        """
+        # Landmarks drawing removed to avoid MediaPipe drawing_utils (uses cv2)
+        return image
+
+    def add_text_overlay(
+        self, image: np.ndarray, sign_detected: str, is_recording: bool,
+        sequence_length: int = 0, current_mode: str = "recognize", current_sign_name: str = "",
         dtw_distance: float = None
     ):
         """
-        Update the webcam display with landmarks, text, and status information.
-        
-        :param frame: Current webcam frame
-        :param results: MediaPipe detection results
+        Add text overlay to the image using PIL.
+
+        :param image: Input image (numpy array)
         :param sign_detected: Detected sign name
         :param is_recording: Whether currently recording
         :param sequence_length: Number of frames collected
         :param current_mode: Current mode ("record" or "recognize")
         :param current_sign_name: Name of sign being recorded
         :param dtw_distance: DTW distance for debugging
+        :return: Image with text overlay (PIL Image)
         """
         self.sign_detected = sign_detected
 
-        # Draw landmarks
-        self.draw_landmarks(frame, results)
+        # Convert numpy array to PIL Image
+        pil_image = Image.fromarray(image)
 
-        WIDTH = int(HEIGHT * len(frame[0]) / len(frame))
         # Resize frame
-        frame = cv2.resize(frame, (WIDTH, HEIGHT), interpolation=cv2.INTER_AREA)
+        h, w = pil_image.size[::-1]  # PIL size is (w, h)
+        aspect_ratio = w / h
+        new_w = int(HEIGHT * aspect_ratio)
+        pil_image = pil_image.resize((new_w, HEIGHT), Image.ANTIALIAS)
 
-        # Flip the image vertically for mirror effect
-        frame = cv2.flip(frame, 1)
+        # Flip the image horizontally for mirror effect
+        pil_image = pil_image.transpose(Image.FLIP_LEFT_RIGHT)
+
+        # Create draw object
+        draw = ImageDraw.Draw(pil_image)
 
         # Draw mode indicator
         mode_text = f"MODE: {current_mode.upper()}"
         mode_color = RED_COLOR if current_mode == "record" else GREEN_COLOR
-        cv2.putText(
-            frame,
-            mode_text,
-            (10, 30),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.8,
-            mode_color,
-            2,
-        )
-
-        # Draw help/keyboard shortcuts
-        help_text = "R=Record  M=Mode  N=NewSign  Q=Quit"
-        cv2.putText(
-            frame,
-            help_text,
-            (10, 60),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.5,
-            WHITE_COLOR,
-            1,
-        )
+        draw.text((10, 10), mode_text, fill=mode_color, font=self.font)
 
         # Draw recording status message
         if is_recording:
-            status_text = f"🎥 Recording... ({sequence_length}/{50} frames)"
-            cv2.putText(
-                frame,
-                status_text,
-                (10, 90),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.7,
-                RED_COLOR,
-                2,
-            )
-        
+            status_text = f"🎥 Recording... ({sequence_length}/50 frames)"
+            draw.text((10, 40), status_text, fill=RED_COLOR, font=self.font)
+
         # Draw current sign name being recorded
         if current_sign_name and current_mode == "record":
             sign_name_text = f"Sign: '{current_sign_name}'"
-            cv2.putText(
-                frame,
-                sign_name_text,
-                (10, 120),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.6,
-                YELLOW_COLOR,
-                2,
-            )
+            draw.text((10, 70), sign_name_text, fill=YELLOW_COLOR, font=self.font)
 
         # Draw DTW distance (for debugging)
         if dtw_distance is not None:
             distance_text = f"DTW Distance: {dtw_distance:.2f}"
-            cv2.putText(
-                frame,
-                distance_text,
-                (10, 150),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.5,
-                CYAN_COLOR,
-                1,
-            )
+            draw.text((10, 100), distance_text, fill=CYAN_COLOR, font=self.font)
 
-        # Write result if there is
-        frame = self.draw_text(frame)
+        # Draw detected sign
+        if sign_detected:
+            pil_image = self.draw_text(pil_image, sign_detected, draw)
 
         # Status circle color
         color = WHITE_COLOR
@@ -121,68 +95,40 @@ class WebcamManager(object):
             color = RED_COLOR
 
         # Draw status indicator (circle)
-        cv2.circle(frame, (WIDTH - 30, 30), 15, color, -1)
-        
-        cv2.imshow("OpenCV Feed", frame)
+        draw.ellipse([new_w - 45, 15, new_w - 15, 45], fill=color)
+
+        # Convert back to numpy array for Streamlit
+        return np.array(pil_image)
 
     def draw_text(
         self,
-        frame,
-        font=cv2.FONT_HERSHEY_COMPLEX,
-        font_size=1,
-        font_thickness=2,
+        pil_image,
+        text,
+        draw=None,
         offset=int(HEIGHT * 0.02),
-        bg_color=(245, 242, 176, 0.85),
+        bg_color=(245, 242, 176),
+        text_color=(118, 62, 37)
     ):
-        window_w = int(HEIGHT * len(frame[0]) / len(frame))
+        if draw is None:
+            draw = ImageDraw.Draw(pil_image)
 
-        (text_w, text_h), _ = cv2.getTextSize(
-            self.sign_detected, font, font_size, font_thickness
-        )
+        w, h = pil_image.size
 
-        text_x, text_y = int((window_w - text_w) / 2), HEIGHT - text_h - offset
+        # Estimate text size (PIL doesn't have getTextSize like cv2)
+        bbox = draw.textbbox((0, 0), text, font=self.font)
+        text_w = bbox[2] - bbox[0]
+        text_h = bbox[3] - bbox[1]
 
-        cv2.rectangle(frame, (0, text_y - offset), (window_w, HEIGHT), bg_color, -1)
-        cv2.putText(
-            frame,
-            self.sign_detected,
-            (text_x, text_y + text_h + font_size - 1),
-            font,
-            font_size,
-            (118, 62, 37),
-            font_thickness,
-        )
-        return frame
+        text_x = int((w - text_w) / 2)
+        text_y = h - text_h - offset
 
-    @staticmethod
-    def draw_landmarks(image, results):
-        mp_holistic = mp.solutions.holistic  # Holistic model
-        mp_drawing = mp.solutions.drawing_utils  # Drawing utilities
+        # Draw background rectangle
+        draw.rectangle([0, text_y - offset, w, h], fill=bg_color)
 
-        # Draw left hand connections
-        mp_drawing.draw_landmarks(
-            image,
-            landmark_list=results.left_hand_landmarks,
-            connections=mp_holistic.HAND_CONNECTIONS,
-            landmark_drawing_spec=mp_drawing.DrawingSpec(
-                color=(232, 254, 255), thickness=1, circle_radius=1
-            ),
-            connection_drawing_spec=mp_drawing.DrawingSpec(
-                color=(255, 249, 161), thickness=2, circle_radius=2
-            ),
-        )
-        # Draw right hand connections
-        mp_drawing.draw_landmarks(
-            image,
-            landmark_list=results.right_hand_landmarks,
-            connections=mp_holistic.HAND_CONNECTIONS,
-            landmark_drawing_spec=mp_drawing.DrawingSpec(
-                color=(232, 254, 255), thickness=1, circle_radius=2
-            ),
-            connection_drawing_spec=mp_drawing.DrawingSpec(
-                color=(255, 249, 161), thickness=2, circle_radius=2
-            ),
-        )
+        # Draw text
+        draw.text((text_x, text_y), text, fill=text_color, font=self.font)
+
+        return pil_image
 =======
 from PIL import Image, ImageDraw, ImageFont
 import numpy as np

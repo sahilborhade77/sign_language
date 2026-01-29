@@ -1,6 +1,7 @@
 streamlit>=1.28.0
-mediapipe>=0.10.20
+mediapipe==0.10.5
 numpy>=1.24.0
 pandas>=2.0.0
 Pillow>=10.0.0
 fastdtw==0.3.2
+opencv-python-headless>=4.8.0

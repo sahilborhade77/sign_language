@@ -86,6 +86,22 @@ class SignRecorder(object):
                 return predicted_text, self.is_recording
 
         return "", self.is_recording
+    def save_reference_sign(self, sign_name):
+        """
+        Save the currently recorded frames as a reference sign.
+        Called from Streamlit app after recording is complete.
+        """
+        if not self.recorded_results:
+            print("No frames to save")
+            return
+    
+        self.current_sign_name = sign_name
+        self.is_saving = True
+        self._save_sign()
+    
+        # Reload stored signs so recognition can use the new sign
+        self.sign_sequences = load_all_sign_sequences()
+        self.num_loaded_signs = len(self.sign_sequences)
 
     def _save_sign(self):
         """Save the recorded gesture sequence to disk."""
@@ -204,3 +220,4 @@ class SignRecorder(object):
         self.is_saving = False
         self.recorded_results = []
         print("Stopped recording")
+

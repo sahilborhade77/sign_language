@@ -92,9 +92,10 @@ def main():
     print(f"✓ Starting in '{mode.upper()}' mode\n")
     
     # Set up the Mediapipe environment
-    with mp.solutions.holistic.Holistic(
+    with mp.solutions.holistic.Holistic(  # type: ignore
         min_detection_confidence=0.5, min_tracking_confidence=0.5
     ) as holistic:
+
         
         try:
             # ============================================================
@@ -212,4 +213,3 @@ if __name__ == "__main__":
         import traceback
         traceback.print_exc()
         sys.exit(1)
-

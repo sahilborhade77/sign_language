@@ -12,9 +12,8 @@ def mediapipe_detection(image, model):
 
 
 def draw_landmarks(image, results):
-    mp_holistic = mp.solutions.holistic  # type: ignore
-    mp_drawing = mp.solutions.drawing_utils  # type: ignore
-
+    mp_holistic = mp.solutions.holistic
+    mp_drawing = mp.solutions.drawing_utils
 
     # Draw left hand connections
     if results.left_hand_landmarks:
